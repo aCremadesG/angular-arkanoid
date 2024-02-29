@@ -2,6 +2,7 @@ import { Component, ViewChild, ElementRef, AfterViewInit, HostListener } from '@
 import { Brick } from '../../interfaces/brick';
 import { Paddle } from '../../interfaces/paddle';
 import { Ball } from '../../interfaces/ball';
+import { BallControllerService } from '../../services/ball-controller.service';
 
 @Component({
   selector: 'app-videogame',
@@ -11,9 +12,14 @@ import { Ball } from '../../interfaces/ball';
   styleUrl: './videogame.component.scss'
 })
 export class VideogameComponent implements AfterViewInit {
+  constructor(
+    private ballControllerService: BallControllerService
+  ){}
   /* Variables de nuestro juego */
   @ViewChild('canvas')
   canvas!: ElementRef;
+  cWidth: number = 0;
+  cHeight: number = 0;
   ctx: CanvasRenderingContext2D | null | undefined;
   @ViewChild('sprite') $sprite!: ElementRef;
   @ViewChild('bricks') $bricks!: ElementRef;
@@ -26,6 +32,7 @@ export class VideogameComponent implements AfterViewInit {
     } else if (key === 'Left' || key === 'ArrowLeft' || key.toLowerCase() === 'a') {
       this.paddle.leftPressed = true
     }
+    console.log(key);
   }
   @HostListener('document:keyup', ['$event'])
   handleKeyupEvent(event: KeyboardEvent) { 
@@ -38,13 +45,7 @@ export class VideogameComponent implements AfterViewInit {
   }
 
   /* VARIABLES DE LA PELOTA */
-  ball: Ball = {
-    ballRadius: 3,
-    x: 0,
-    y: 0,
-    dx: -3,
-    dy: -3
-  } as Ball
+  ball: Ball = {} as Ball
 
   /* VARIABLES DE LA PALETA */
   paddle: Paddle = {
@@ -81,15 +82,21 @@ export class VideogameComponent implements AfterViewInit {
   frames = 0
   framesPerSec = this.fps;
 
+  ngOnInit(){
+    this.ballControllerService.getBall().subscribe(res =>{
+      this.ball = res.ball;
+    })
+  }
+
   ngAfterViewInit(): void {
-    let canvasWidth = (this.canvas.nativeElement as HTMLCanvasElement).width;
-    let canvasHeight = (this.canvas.nativeElement as HTMLCanvasElement).height;
+    this.cWidth = (this.canvas.nativeElement as HTMLCanvasElement).width;
+    this.cHeight = (this.canvas.nativeElement as HTMLCanvasElement).height;
     this.ctx = (this.canvas.nativeElement as HTMLCanvasElement).getContext('2d');
-    this.ball.x = canvasWidth / 2;
-    this.ball.y = canvasHeight - 30;
-    this.paddle.x = (canvasWidth - this.paddle.paddleWidth) / 2;
-    this.paddle.y = canvasHeight - this.paddle.paddleHeight - 10;
-    
+    this.ballControllerService.initBall(this.cWidth / 2, this.cHeight - 30);
+    this.ball.x = this.cWidth / 2;
+    this.ball.y = this.cHeight - 30;
+    this.paddle.x = (this.cWidth - this.paddle.paddleWidth) / 2;
+    this.paddle.y = this.cHeight - this.paddle.paddleHeight - 10;
     for (let c = 0; c < this.brickColumnCount; c++) {
       this.bricks[c] = [] // inicializamos con un array vacio
       for (let r = 0; r < this.brickRowCount; r++) {
@@ -107,41 +114,33 @@ export class VideogameComponent implements AfterViewInit {
         }
       }
     }
-
     this.draw();
   }
 
   draw() {
     requestAnimationFrame(this.draw.bind(this));
-
     const msNow = window.performance.now()
     const msPassed = msNow - this.msPrev
-
     if (msPassed < this.msPerFrame) return
-
     const excessTime = msPassed % this.msPerFrame
     this.msPrev = msNow - excessTime
-
     this.frames++
-
     if (this.msFPSPrev < msNow)
     {
       this.msFPSPrev = window.performance.now() + 1000
       this.framesPerSec = this.frames;
       this.frames = 0;
     }
-
     // ... render code
     this.cleanCanvas()
     // hay que dibujar los elementos
-    this.drawBall()
+    this.ballControllerService.drawBall(this.ctx!)
     this.drawPaddle()
     this.drawBricks()
     this.drawUI()
-
     // colisiones y movimientos
     this.collisionDetection()
-    this.ballMovement()
+    this.ballControllerService.ballMovement(this.cWidth, this.cHeight, this.paddle);
     this.paddleMovement()
   }
 
@@ -150,15 +149,12 @@ export class VideogameComponent implements AfterViewInit {
       for (let r = 0; r < this.brickRowCount; r++) {
         const currentBrick = this.bricks[c][r]
         if (currentBrick.status === this.BRICK_STATUS.DESTROYED) continue;
-
         const isBallSameXAsBrick =
           this.ball.x > currentBrick.x &&
           this.ball.x < currentBrick.x + this.brickWidth
-
         const isBallSameYAsBrick =
           this.ball.y > currentBrick.y &&
           this.ball.y < currentBrick.y + this.brickHeight
-
         if (isBallSameXAsBrick && isBallSameYAsBrick) {
           this.ball.dy = -this.ball.dy
           currentBrick.status = this.BRICK_STATUS.DESTROYED
@@ -173,50 +169,7 @@ export class VideogameComponent implements AfterViewInit {
 
   
   cleanCanvas() {
-    this.ctx!.clearRect(0, 0, (this.canvas.nativeElement as HTMLCanvasElement).width, (this.canvas.nativeElement as HTMLCanvasElement).height)
-  }
-
-  ballMovement() {
-    // rebotar las pelotas en los laterales
-    if (
-      this.ball.x + this.ball.dx > (this.canvas.nativeElement as HTMLCanvasElement).width - this.ball.ballRadius || // la pared derecha
-      this.ball.x + this.ball.dx < this.ball.ballRadius // la pared izquierda
-    ) {
-      this.ball.dx = -this.ball.dx
-    }
-
-    // rebotar en la parte de arriba
-    if (this.ball.y + this.ball.dy < this.ball.ballRadius) {
-      this.ball.dy = -this.ball.dy
-    }
-
-    // la pelota toca la pala
-    const isBallSameXAsPaddle =
-      this.ball.x > this.paddle.x &&
-      this.ball.x < this.paddle.x + this.paddle.paddleWidth
-
-    const isBallTouchingPaddle = this.ball.y + this.ball.dy > this.paddle.y
-
-    if (isBallSameXAsPaddle && isBallTouchingPaddle) {
-      this.ball.dy = -this.ball.dy // cambiamos la dirección de la pelota
-    } else if ( // la pelota toca el suelo
-    this.ball.y + this.ball.dy > (this.canvas.nativeElement as HTMLCanvasElement).height - this.ball.ballRadius || this.ball.y + this.ball.dy > this.paddle.y + this.paddle.paddleHeight
-    ) {
-      console.log('Game Over')
-      document.location.reload()
-    }
-
-    // mover la pelota
-    this.ball.x += this.ball.dx
-    this.ball.y += this.ball.dy
-  }
-  
-  drawBall() {
-    this.ctx!.beginPath() // iniciar el trazado
-    this.ctx!.arc(this.ball.x, this.ball.y, this.ball.ballRadius, 0, Math.PI * 2)
-    this.ctx!.fillStyle = '#fff'
-    this.ctx!.fill()
-    this.ctx!.closePath() // terminar el trazado
+    this.ctx!.clearRect(0, 0, this.cWidth, this.cHeight)
   }
   
   drawPaddle() {
@@ -238,9 +191,7 @@ export class VideogameComponent implements AfterViewInit {
       for (let r = 0; r < this.brickRowCount; r++) {
         const currentBrick = this.bricks[c][r]
         if (currentBrick.status === this.BRICK_STATUS.DESTROYED) continue;
-
         const clipX = currentBrick.color * 32
-
         this.ctx!.drawImage(
           this.$bricks!.nativeElement,
           clipX,
@@ -257,7 +208,7 @@ export class VideogameComponent implements AfterViewInit {
   }
 
   paddleMovement() {
-    if (this.paddle.rightPressed && this.paddle.x < (this.canvas.nativeElement as HTMLCanvasElement).width - this.paddle.paddleWidth) {
+    if (this.paddle.rightPressed && this.paddle.x < this.cWidth - this.paddle.paddleWidth) {
       this.paddle.x += this.paddle.PADDLE_SENSITIVITY
     } else if (this.paddle.leftPressed && this.paddle.x > 0) {
       this.paddle.x -= this.paddle.PADDLE_SENSITIVITY
