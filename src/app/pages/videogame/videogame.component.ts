@@ -1,6 +1,7 @@
 import { Component, ViewChild, ElementRef, AfterViewInit, HostListener } from '@angular/core';
 import { Brick } from '../../interfaces/brick';
 import { Paddle } from '../../interfaces/paddle';
+import { Ball } from '../../interfaces/ball';
 
 @Component({
   selector: 'app-videogame',
@@ -21,29 +22,29 @@ export class VideogameComponent implements AfterViewInit {
   handleKeydownEvent(event: KeyboardEvent) { 
     const { key } = event
     if (key === 'Right' || key === 'ArrowRight' || key.toLowerCase() === 'd') {
-      this.rightPressed = true
+      this.paddle.rightPressed = true
     } else if (key === 'Left' || key === 'ArrowLeft' || key.toLowerCase() === 'a') {
-      this.leftPressed = true
+      this.paddle.leftPressed = true
     }
   }
   @HostListener('document:keyup', ['$event'])
   handleKeyupEvent(event: KeyboardEvent) { 
     const { key } = event
     if (key === 'Right' || key === 'ArrowRight' || key.toLowerCase() === 'd') {
-      this.rightPressed = false
+      this.paddle.rightPressed = false
     } else if (key === 'Left' || key === 'ArrowLeft' || key.toLowerCase() === 'a') {
-      this.leftPressed = false
+      this.paddle.leftPressed = false
     }
   }
 
   /* VARIABLES DE LA PELOTA */
-  ballRadius = 3;
-  // posicion de la pelota
-  x = 0;
-  y = 0;
-  // velocidad de la pelota
-  dx = -3;
-  dy = -3;
+  ball: Ball = {
+    ballRadius: 3,
+    x: 0,
+    y: 0,
+    dx: -3,
+    dy: -3
+  } as Ball
 
   /* VARIABLES DE LA PALETA */
   paddle: Paddle = {
@@ -55,9 +56,6 @@ export class VideogameComponent implements AfterViewInit {
     rightPressed: false,
     leftPressed: false
   } as Paddle
-
-  rightPressed = false;
-  leftPressed = false;
   
   /* VARIABLES DE LOS LADRILLOS */
   brickRowCount = 6;
@@ -87,8 +85,8 @@ export class VideogameComponent implements AfterViewInit {
     let canvasWidth = (this.canvas.nativeElement as HTMLCanvasElement).width;
     let canvasHeight = (this.canvas.nativeElement as HTMLCanvasElement).height;
     this.ctx = (this.canvas.nativeElement as HTMLCanvasElement).getContext('2d');
-    this.x = canvasWidth / 2;
-    this.y = canvasHeight - 30;
+    this.ball.x = canvasWidth / 2;
+    this.ball.y = canvasHeight - 30;
     this.paddle.x = (canvasWidth - this.paddle.paddleWidth) / 2;
     this.paddle.y = canvasHeight - this.paddle.paddleHeight - 10;
     
@@ -143,7 +141,7 @@ export class VideogameComponent implements AfterViewInit {
 
     // colisiones y movimientos
     this.collisionDetection()
-    //this.ballMovement()
+    this.ballMovement()
     this.paddleMovement()
   }
 
@@ -154,15 +152,15 @@ export class VideogameComponent implements AfterViewInit {
         if (currentBrick.status === this.BRICK_STATUS.DESTROYED) continue;
 
         const isBallSameXAsBrick =
-          this.x > currentBrick.x &&
-          this.x < currentBrick.x + this.brickWidth
+          this.ball.x > currentBrick.x &&
+          this.ball.x < currentBrick.x + this.brickWidth
 
         const isBallSameYAsBrick =
-          this.y > currentBrick.y &&
-          this.y < currentBrick.y + this.brickHeight
+          this.ball.y > currentBrick.y &&
+          this.ball.y < currentBrick.y + this.brickHeight
 
         if (isBallSameXAsBrick && isBallSameYAsBrick) {
-          this.dy = -this.dy
+          this.ball.dy = -this.ball.dy
           currentBrick.status = this.BRICK_STATUS.DESTROYED
         }
       }
@@ -181,41 +179,41 @@ export class VideogameComponent implements AfterViewInit {
   ballMovement() {
     // rebotar las pelotas en los laterales
     if (
-      this.x + this.dx > (this.canvas.nativeElement as HTMLCanvasElement).width - this.ballRadius || // la pared derecha
-      this.x + this.dx < this.ballRadius // la pared izquierda
+      this.ball.x + this.ball.dx > (this.canvas.nativeElement as HTMLCanvasElement).width - this.ball.ballRadius || // la pared derecha
+      this.ball.x + this.ball.dx < this.ball.ballRadius // la pared izquierda
     ) {
-      this.dx = -this.dx
+      this.ball.dx = -this.ball.dx
     }
 
     // rebotar en la parte de arriba
-    if (this.y + this.dy < this.ballRadius) {
-      this.dy = -this.dy
+    if (this.ball.y + this.ball.dy < this.ball.ballRadius) {
+      this.ball.dy = -this.ball.dy
     }
 
     // la pelota toca la pala
     const isBallSameXAsPaddle =
-      this.x > this.paddle.x &&
-      this.x < this.paddle.x + this.paddle.paddleWidth
+      this.ball.x > this.paddle.x &&
+      this.ball.x < this.paddle.x + this.paddle.paddleWidth
 
-    const isBallTouchingPaddle = this.y + this.dy > this.paddle.y
+    const isBallTouchingPaddle = this.ball.y + this.ball.dy > this.paddle.y
 
     if (isBallSameXAsPaddle && isBallTouchingPaddle) {
-      this.dy = -this.dy // cambiamos la dirección de la pelota
+      this.ball.dy = -this.ball.dy // cambiamos la dirección de la pelota
     } else if ( // la pelota toca el suelo
-    this.y + this.dy > (this.canvas.nativeElement as HTMLCanvasElement).height - this.ballRadius || this.y + this.dy > this.paddle.y + this.paddle.paddleHeight
+    this.ball.y + this.ball.dy > (this.canvas.nativeElement as HTMLCanvasElement).height - this.ball.ballRadius || this.ball.y + this.ball.dy > this.paddle.y + this.paddle.paddleHeight
     ) {
       console.log('Game Over')
       document.location.reload()
     }
 
     // mover la pelota
-    this.x += this.dx
-    this.y += this.dy
+    this.ball.x += this.ball.dx
+    this.ball.y += this.ball.dy
   }
   
   drawBall() {
     this.ctx!.beginPath() // iniciar el trazado
-    this.ctx!.arc(this.x, this.y, this.ballRadius, 0, Math.PI * 2)
+    this.ctx!.arc(this.ball.x, this.ball.y, this.ball.ballRadius, 0, Math.PI * 2)
     this.ctx!.fillStyle = '#fff'
     this.ctx!.fill()
     this.ctx!.closePath() // terminar el trazado
@@ -259,9 +257,9 @@ export class VideogameComponent implements AfterViewInit {
   }
 
   paddleMovement() {
-    if (this.rightPressed && this.paddle.x < (this.canvas.nativeElement as HTMLCanvasElement).width - this.paddle.paddleWidth) {
+    if (this.paddle.rightPressed && this.paddle.x < (this.canvas.nativeElement as HTMLCanvasElement).width - this.paddle.paddleWidth) {
       this.paddle.x += this.paddle.PADDLE_SENSITIVITY
-    } else if (this.leftPressed && this.paddle.x > 0) {
+    } else if (this.paddle.leftPressed && this.paddle.x > 0) {
       this.paddle.x -= this.paddle.PADDLE_SENSITIVITY
     }
   }
