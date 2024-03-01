@@ -47,10 +47,10 @@ export class BallControllerService extends BallController{
   }
 
   sendBall(){
-    this.subject.next({ball: this.ball})
+    this.subject.next({ball: this.ball});
   }
 
   getBall(){
-    return this.subject.asObservable()
+    return this.subject.asObservable();
   }
 }

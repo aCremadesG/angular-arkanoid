@@ -3,6 +3,7 @@ import { Brick } from '../../interfaces/brick';
 import { Paddle } from '../../interfaces/paddle';
 import { Ball } from '../../interfaces/ball';
 import { BallControllerService } from '../../services/ball-controller.service';
+import { PaddleControllerService } from '../../services/paddle-controller.service';
 
 @Component({
   selector: 'app-videogame',
@@ -13,7 +14,8 @@ import { BallControllerService } from '../../services/ball-controller.service';
 })
 export class VideogameComponent implements AfterViewInit {
   constructor(
-    private ballControllerService: BallControllerService
+    private ballControllerService: BallControllerService,
+    private paddleControllerService: PaddleControllerService
   ){}
   /* Variables de nuestro juego */
   @ViewChild('canvas')
@@ -28,9 +30,9 @@ export class VideogameComponent implements AfterViewInit {
   handleKeydownEvent(event: KeyboardEvent) { 
     const { key } = event
     if (key === 'Right' || key === 'ArrowRight' || key.toLowerCase() === 'd') {
-      this.paddle.rightPressed = true
+      this.paddleControllerService.setRightPressed(true);
     } else if (key === 'Left' || key === 'ArrowLeft' || key.toLowerCase() === 'a') {
-      this.paddle.leftPressed = true
+      this.paddleControllerService.setLeftPressed(true);
     }
     console.log(key);
   }
@@ -38,9 +40,9 @@ export class VideogameComponent implements AfterViewInit {
   handleKeyupEvent(event: KeyboardEvent) { 
     const { key } = event
     if (key === 'Right' || key === 'ArrowRight' || key.toLowerCase() === 'd') {
-      this.paddle.rightPressed = false
+      this.paddleControllerService.setRightPressed(false);
     } else if (key === 'Left' || key === 'ArrowLeft' || key.toLowerCase() === 'a') {
-      this.paddle.leftPressed = false
+      this.paddleControllerService.setLeftPressed(false);
     }
   }
 
@@ -48,15 +50,7 @@ export class VideogameComponent implements AfterViewInit {
   ball: Ball = {} as Ball
 
   /* VARIABLES DE LA PALETA */
-  paddle: Paddle = {
-    PADDLE_SENSITIVITY: 8,
-    paddleHeight: 10,
-    paddleWidth: 50,
-    x: 0,
-    y: 0,
-    rightPressed: false,
-    leftPressed: false
-  } as Paddle
+  paddle: Paddle = {} as Paddle
   
   /* VARIABLES DE LOS LADRILLOS */
   brickRowCount = 6;
@@ -86,6 +80,10 @@ export class VideogameComponent implements AfterViewInit {
     this.ballControllerService.getBall().subscribe(res =>{
       this.ball = res.ball;
     })
+    this.paddleControllerService.getPaddle().subscribe(res => {
+      this.paddle = res.paddle;
+      console.log(res.paddle);
+    })
   }
 
   ngAfterViewInit(): void {
@@ -93,10 +91,7 @@ export class VideogameComponent implements AfterViewInit {
     this.cHeight = (this.canvas.nativeElement as HTMLCanvasElement).height;
     this.ctx = (this.canvas.nativeElement as HTMLCanvasElement).getContext('2d');
     this.ballControllerService.initBall(this.cWidth / 2, this.cHeight - 30);
-    this.ball.x = this.cWidth / 2;
-    this.ball.y = this.cHeight - 30;
-    this.paddle.x = (this.cWidth - this.paddle.paddleWidth) / 2;
-    this.paddle.y = this.cHeight - this.paddle.paddleHeight - 10;
+    this.paddleControllerService.initPaddle(this.cWidth, this.cHeight);
     for (let c = 0; c < this.brickColumnCount; c++) {
       this.bricks[c] = [] // inicializamos con un array vacio
       for (let r = 0; r < this.brickRowCount; r++) {
@@ -135,13 +130,13 @@ export class VideogameComponent implements AfterViewInit {
     this.cleanCanvas()
     // hay que dibujar los elementos
     this.ballControllerService.drawBall(this.ctx!)
-    this.drawPaddle()
+    this.paddleControllerService.drawPaddle(this.ctx!, this.$sprite!.nativeElement);
     this.drawBricks()
     this.drawUI()
     // colisiones y movimientos
     this.collisionDetection()
     this.ballControllerService.ballMovement(this.cWidth, this.cHeight, this.paddle);
-    this.paddleMovement()
+    this.paddleControllerService.paddleMovement(this.cWidth);
   }
 
   collisionDetection() {
@@ -171,20 +166,6 @@ export class VideogameComponent implements AfterViewInit {
   cleanCanvas() {
     this.ctx!.clearRect(0, 0, this.cWidth, this.cHeight)
   }
-  
-  drawPaddle() {
-    this.ctx!.drawImage(
-      this.$sprite!.nativeElement, // imagen
-      29, // clipX: coordenadas de recorte
-      174, // clipY: coordenadas de recorte
-      this.paddle.paddleWidth, // el tamaño del recorte
-      this.paddle.paddleHeight, // tamaño del recorte
-      this.paddle.x, // posición X del dibujo
-      this.paddle.y, // posición Y del dibujo
-      this.paddle.paddleWidth, // ancho del dibujo
-      this.paddle.paddleHeight // alto del dibujo
-    )
-  }
 
   drawBricks() {
     for (let c = 0; c < this.brickColumnCount; c++) {
@@ -204,14 +185,6 @@ export class VideogameComponent implements AfterViewInit {
           this.brickHeight
         )
       }
-    }
-  }
-
-  paddleMovement() {
-    if (this.paddle.rightPressed && this.paddle.x < this.cWidth - this.paddle.paddleWidth) {
-      this.paddle.x += this.paddle.PADDLE_SENSITIVITY
-    } else if (this.paddle.leftPressed && this.paddle.x > 0) {
-      this.paddle.x -= this.paddle.PADDLE_SENSITIVITY
     }
   }
 }
