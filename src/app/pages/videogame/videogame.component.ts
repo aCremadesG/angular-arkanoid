@@ -4,6 +4,7 @@ import { Paddle } from '../../interfaces/paddle';
 import { Ball } from '../../interfaces/ball';
 import { BallControllerService } from '../../services/ball-controller.service';
 import { PaddleControllerService } from '../../services/paddle-controller.service';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-videogame',
@@ -16,7 +17,14 @@ export class VideogameComponent implements AfterViewInit {
   constructor(
     private ballControllerService: BallControllerService,
     private paddleControllerService: PaddleControllerService
-  ){}
+  ){
+    this.ballSubscription = this.ballControllerService.getBall().subscribe(res =>{
+      this.ball = res.ball;
+    })
+    this.paddleSubscription = this.paddleControllerService.getPaddle().subscribe(res => {
+      this.paddle = res.paddle;
+    })
+  }
   /* Variables de nuestro juego */
   @ViewChild('canvas')
   canvas!: ElementRef;
@@ -26,6 +34,8 @@ export class VideogameComponent implements AfterViewInit {
   @ViewChild('sprite') $sprite!: ElementRef;
   @ViewChild('bricks') $bricks!: ElementRef;
 
+  
+
   @HostListener('document:keydown', ['$event'])
   handleKeydownEvent(event: KeyboardEvent) { 
     const { key } = event
@@ -33,6 +43,8 @@ export class VideogameComponent implements AfterViewInit {
       this.paddleControllerService.setRightPressed(true);
     } else if (key === 'Left' || key === 'ArrowLeft' || key.toLowerCase() === 'a') {
       this.paddleControllerService.setLeftPressed(true);
+    } else if(key === 'Escape'){
+
     }
     console.log(key);
   }
@@ -43,6 +55,8 @@ export class VideogameComponent implements AfterViewInit {
       this.paddleControllerService.setRightPressed(false);
     } else if (key === 'Left' || key === 'ArrowLeft' || key.toLowerCase() === 'a') {
       this.paddleControllerService.setLeftPressed(false);
+    } else if(key === 'Escape'){
+
     }
   }
 
@@ -76,15 +90,9 @@ export class VideogameComponent implements AfterViewInit {
   frames = 0
   framesPerSec = this.fps;
 
-  ngOnInit(){
-    this.ballControllerService.getBall().subscribe(res =>{
-      this.ball = res.ball;
-    })
-    this.paddleControllerService.getPaddle().subscribe(res => {
-      this.paddle = res.paddle;
-      console.log(res.paddle);
-    })
-  }
+  // variables de subscripción a los servicios
+  ballSubscription: Subscription;
+  paddleSubscription: Subscription;
 
   ngAfterViewInit(): void {
     this.cWidth = (this.canvas.nativeElement as HTMLCanvasElement).width;
@@ -112,6 +120,11 @@ export class VideogameComponent implements AfterViewInit {
     this.draw();
   }
 
+  ngOnDestroy() {
+    this.ballSubscription.unsubscribe()
+    this.paddleSubscription.unsubscribe()
+  }
+
   draw() {
     requestAnimationFrame(this.draw.bind(this));
     const msNow = window.performance.now()
@@ -128,6 +141,14 @@ export class VideogameComponent implements AfterViewInit {
     }
     // ... render code
     this.cleanCanvas()
+    this.playState()
+  }
+
+  pauseState(){
+
+  }
+
+  playState(){
     // hay que dibujar los elementos
     this.ballControllerService.drawBall(this.ctx!)
     this.paddleControllerService.drawPaddle(this.ctx!, this.$sprite!.nativeElement);
@@ -135,7 +156,7 @@ export class VideogameComponent implements AfterViewInit {
     this.drawUI()
     // colisiones y movimientos
     this.collisionDetection()
-    this.ballControllerService.ballMovement(this.cWidth, this.cHeight, this.paddle);
+    //this.ballControllerService.ballMovement(this.cWidth, this.cHeight, this.paddle);
     this.paddleControllerService.paddleMovement(this.cWidth);
   }
 
