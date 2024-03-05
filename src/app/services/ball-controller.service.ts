@@ -29,8 +29,9 @@ export class BallControllerService extends BallController{
     if (isBallSameXAsPaddle && isBallTouchingPaddle) {
         this.ball.dy = -this.ball.dy // cambiamos la dirección de la pelota
     } else if (this.ball.y + this.ball.dy > cHeight - this.ball.ballRadius || this.ball.y + this.ball.dy > paddle.y + paddle.paddleHeight) {
-        console.log('Game Over');
-        document.location.reload();
+      //Cuando esto suceda no tendra que recargar la pagina, tendra que reiniciar el juego.  
+      console.log('Game Over');
+      document.location.reload();
     }
     // mover la pelota
     this.ball.x += this.ball.dx;

@@ -5,6 +5,8 @@ import { Ball } from '../../interfaces/ball';
 import { BallControllerService } from '../../services/ball-controller.service';
 import { PaddleControllerService } from '../../services/paddle-controller.service';
 import { Subscription } from 'rxjs';
+import { PowerUp } from '../../interfaces/power-up';
+import { LevelControllerService } from '../../services/level-controller.service';
 
 @Component({
   selector: 'app-videogame',
@@ -16,7 +18,8 @@ import { Subscription } from 'rxjs';
 export class VideogameComponent implements AfterViewInit {
   constructor(
     private ballControllerService: BallControllerService,
-    private paddleControllerService: PaddleControllerService
+    private paddleControllerService: PaddleControllerService,
+    private levelControllerService: LevelControllerService
   ){
     this.ballSubscription = this.ballControllerService.getBall().subscribe(res =>{
       this.ball = res.ball;
@@ -30,11 +33,14 @@ export class VideogameComponent implements AfterViewInit {
   canvas!: ElementRef;
   cWidth: number = 0;
   cHeight: number = 0;
+  points: number = 0;
+  level: number = 0;
   ctx: CanvasRenderingContext2D | null | undefined;
   @ViewChild('sprite') $sprite!: ElementRef;
   @ViewChild('bricks') $bricks!: ElementRef;
 
-  
+  /*Primera version de una maquina de estados*/
+  gamePaused = false;
 
   @HostListener('document:keydown', ['$event'])
   handleKeydownEvent(event: KeyboardEvent) { 
@@ -44,9 +50,8 @@ export class VideogameComponent implements AfterViewInit {
     } else if (key === 'Left' || key === 'ArrowLeft' || key.toLowerCase() === 'a') {
       this.paddleControllerService.setLeftPressed(true);
     } else if(key === 'Escape'){
-
+      this.gamePaused = !this.gamePaused
     }
-    console.log(key);
   }
   @HostListener('document:keyup', ['$event'])
   handleKeyupEvent(event: KeyboardEvent) { 
@@ -55,8 +60,6 @@ export class VideogameComponent implements AfterViewInit {
       this.paddleControllerService.setRightPressed(false);
     } else if (key === 'Left' || key === 'ArrowLeft' || key.toLowerCase() === 'a') {
       this.paddleControllerService.setLeftPressed(false);
-    } else if(key === 'Escape'){
-
     }
   }
 
@@ -67,14 +70,12 @@ export class VideogameComponent implements AfterViewInit {
   paddle: Paddle = {} as Paddle
   
   /* VARIABLES DE LOS LADRILLOS */
-  brickRowCount = 6;
-  brickColumnCount = 13;
   brickWidth = 32;
   brickHeight = 16;
   brickPadding = 0;
   brickOffsetTop = 80;
   brickOffsetLeft = 16;
-  bricks: Array<Array<Brick>> = [[]];
+  bricks: Brick[] = [];
 
   BRICK_STATUS = {
     ACTIVE: 1,
@@ -100,24 +101,16 @@ export class VideogameComponent implements AfterViewInit {
     this.ctx = (this.canvas.nativeElement as HTMLCanvasElement).getContext('2d');
     this.ballControllerService.initBall(this.cWidth / 2, this.cHeight - 30);
     this.paddleControllerService.initPaddle(this.cWidth, this.cHeight);
-    for (let c = 0; c < this.brickColumnCount; c++) {
-      this.bricks[c] = [] // inicializamos con un array vacio
-      for (let r = 0; r < this.brickRowCount; r++) {
-        // calculamos la posicion del ladrillo en la pantalla
-        const brickX = c * (this.brickWidth + this.brickPadding) + this.brickOffsetLeft
-        const brickY = r * (this.brickHeight + this.brickPadding) + this.brickOffsetTop
-        // Asignar un color aleatorio a cada ladrillo
-        const random = Math.floor(Math.random() * 8)
-        // Guardamos la información de cada ladrillo
-        this.bricks[c][r] = {
-          x: brickX,
-          y: brickY,
-          status: this.BRICK_STATUS.ACTIVE,
-          color: random
-        }
-      }
-    }
+    //this.loadDefaultLevel();
+    this.loadLevel();
     this.draw();
+  }
+
+  loadLevel() {
+    const level = this.levelControllerService.getLevel(this.level);
+    this.bricks = level.bricks
+    this.brickWidth = level.brickWidth;
+    this.brickHeight = level.brickHeight;
   }
 
   ngOnDestroy() {
@@ -141,40 +134,44 @@ export class VideogameComponent implements AfterViewInit {
     }
     // ... render code
     this.cleanCanvas()
-    this.playState()
-  }
-
-  pauseState(){
-
-  }
-
-  playState(){
     // hay que dibujar los elementos
     this.ballControllerService.drawBall(this.ctx!)
     this.paddleControllerService.drawPaddle(this.ctx!, this.$sprite!.nativeElement);
     this.drawBricks()
     this.drawUI()
+    if(this.gamePaused){
+      this.playState()
+    }else{
+      this.pauseState()
+    }
+  }
+
+  pauseState(){
+    this.drawLetter();
+  }
+
+  playState(){
     // colisiones y movimientos
     this.collisionDetection()
-    //this.ballControllerService.ballMovement(this.cWidth, this.cHeight, this.paddle);
+    this.ballControllerService.ballMovement(this.cWidth, this.cHeight, this.paddle);
     this.paddleControllerService.paddleMovement(this.cWidth);
   }
 
   collisionDetection() {
-    for (let c = 0; c < this.brickColumnCount; c++) {
-      for (let r = 0; r < this.brickRowCount; r++) {
-        const currentBrick = this.bricks[c][r]
-        if (currentBrick.status === this.BRICK_STATUS.DESTROYED) continue;
-        const isBallSameXAsBrick =
-          this.ball.x > currentBrick.x &&
-          this.ball.x < currentBrick.x + this.brickWidth
-        const isBallSameYAsBrick =
-          this.ball.y > currentBrick.y &&
-          this.ball.y < currentBrick.y + this.brickHeight
-        if (isBallSameXAsBrick && isBallSameYAsBrick) {
-          this.ball.dy = -this.ball.dy
-          currentBrick.status = this.BRICK_STATUS.DESTROYED
-        }
+    const bricksCount = this.bricks.length;
+    for (let r = 0; r < bricksCount; r++) {
+      const currentBrick = this.bricks[r]
+      if (currentBrick.status === this.BRICK_STATUS.DESTROYED) continue;
+      const isBallSameXAsBrick =
+        this.ball.x > currentBrick.x &&
+        this.ball.x < currentBrick.x + this.brickWidth
+      const isBallSameYAsBrick =
+        this.ball.y > currentBrick.y &&
+        this.ball.y < currentBrick.y + this.brickHeight
+      if (isBallSameXAsBrick && isBallSameYAsBrick) {
+        this.ball.dy = -this.ball.dy
+        currentBrick.status = this.BRICK_STATUS.DESTROYED
+        this.points += 100;
       }
     }
   }
@@ -188,24 +185,41 @@ export class VideogameComponent implements AfterViewInit {
     this.ctx!.clearRect(0, 0, this.cWidth, this.cHeight)
   }
 
+  pauseArray = [{x: 309, y:93},{x: 273, y:75},{x: 309, y:102},{x: 291, y:102},{x: 309, y:75}]
+
+  drawLetter() {
+    this.pauseArray.map((letter, i) => {
+      this.ctx!.drawImage(
+        this.$sprite!.nativeElement, // imagen
+        letter.x, // clipX: coordenadas de recorte
+        letter.y, // clipY: coordenadas de recorte
+        9, // el tamaño del recorte
+        8, // tamaño del recorte
+        ((this.cWidth / 2) - 23) + (10 * i), // posición X del dibujo
+        220, // posición Y del dibujo
+        9, // ancho del dibujo
+        8 // alto del dibujo
+      )
+    })
+  }
+
   drawBricks() {
-    for (let c = 0; c < this.brickColumnCount; c++) {
-      for (let r = 0; r < this.brickRowCount; r++) {
-        const currentBrick = this.bricks[c][r]
-        if (currentBrick.status === this.BRICK_STATUS.DESTROYED) continue;
-        const clipX = currentBrick.color * 32
-        this.ctx!.drawImage(
-          this.$bricks!.nativeElement,
-          clipX,
-          0,
-          this.brickWidth, // 31
-          this.brickHeight, // 14
-          currentBrick.x,
-          currentBrick.y,
-          this.brickWidth,
-          this.brickHeight
-        )
-      }
+    const brickRowCount = this.bricks.length;
+    for (let r = 0; r < brickRowCount; r++) {
+      const currentBrick = this.bricks[r]
+      if (currentBrick.status === this.BRICK_STATUS.DESTROYED) continue;
+      const clipX = currentBrick.color * 32
+      this.ctx!.drawImage(
+        this.$bricks!.nativeElement,
+        clipX,
+        0,
+        this.brickWidth, // 31
+        this.brickHeight, // 14
+        currentBrick.x,
+        currentBrick.y,
+        this.brickWidth,
+        this.brickHeight
+      )
     }
   }
 }

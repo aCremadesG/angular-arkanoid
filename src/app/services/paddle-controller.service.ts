@@ -29,7 +29,6 @@ export class PaddleControllerService extends PaddleController{
       this.paddle.paddleWidth, // ancho del dibujo
       this.paddle.paddleHeight // alto del dibujo
     )
-    console.log(this.paddle.x, this.paddle.y)
   }
 
   setRightPressed(state: boolean){
